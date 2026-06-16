@@ -38,7 +38,17 @@ jobs:
           docker logs fit4110-notify-lab04
 
       - name: Wait for service health
-        run: npx wait-on http://127.0.0.1:8000/health --timeout 30000
+        run: |
+          for i in {1..15}; do
+            if curl -s -f http://127.0.0.1:8000/health; then
+              echo "Service is healthy!"
+              exit 0
+            fi
+            echo "Waiting for service to start..."
+            sleep 2
+          done
+          echo "Service did not start in time"
+          exit 1
 
       - name: Run Newman against Docker container
         run: npm run test:local

@@ -146,8 +146,8 @@ paths:
                       alertId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2bcde"
                       currentStatus: "PENDING"
                       targetUserId: "SV-12345"
-                      sentAt: null
-                      errorMessage: null
+                      sentAt: "2026-06-08T23:15:05Z"
+                      errorMessage: ""
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

@@ -75,19 +75,19 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AlertPayload'
-          examples:
-            criticalAccessAlert:
-              value:
-                eventId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2babc"
-                eventType: "core.alert.created"
-                occurredAt: "2026-06-08T23:15:00Z"
-                correlationId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2aaaa"
-                source: "core-business"
-                data:
-                  alertId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2bcde"
-                  severity: "HIGH"
-                  message: "Phát hiện xâm nhập trái phép tại khu vực cổng chính tòa IT"
-                  targetUserId: "SV-12345"
+            examples:
+              criticalAccessAlert:
+                value:
+                  eventId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2babc"
+                  eventType: "core.alert.created"
+                  occurredAt: "2026-06-08T23:15:00Z"
+                  correlationId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2aaaa"
+                  source: "core-business"
+                  data:
+                    alertId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2bcde"
+                    severity: "HIGH"
+                    message: "Phát hiện xâm nhập trái phép tại khu vực cổng chính tòa IT"
+                    targetUserId: "SV-12345"
       responses:
         '202':
           description: Yêu cầu đã được tiếp nhận hợp lệ và đưa vào hàng đợi xử lý ngầm (Asynchronous).

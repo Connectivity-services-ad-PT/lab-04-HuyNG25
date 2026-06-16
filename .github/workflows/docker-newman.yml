@@ -33,6 +33,9 @@ jobs:
             -p 8000:8000 \
             --env-file .env.example \
             fit4110/notification-service:lab04
+          sleep 3
+          docker ps -a
+          docker logs fit4110-notify-lab04
 
       - name: Wait for service health
         run: npx wait-on http://127.0.0.1:8000/health --timeout 30000

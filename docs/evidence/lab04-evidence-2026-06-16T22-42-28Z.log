@@ -1,0 +1,19 @@
+﻿=== FIT4110 Lab 04 - Evidence Log ===
+Team     : team-notify (B7 Notification Service)
+Timestamp: 2026-06-16T22-42-28Z
+
+--- GET /health Response (HTTP 200) ---
+{
+    "status":  "ok",
+    "service":  "notification-service",
+    "time":  "2026-06-16T15:42:28Z"
+}
+
+--- Docker Container Status ---
+CONTAINER ID   IMAGE                                STATUS                    PORTS 5fd51ce8899c   fit4110/notification-service:lab04   Up 45 seconds (healthy)   0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+
+--- Non-root User Verification ---
+User=appuser NonRoot=true
+
+--- Image Info ---
+Repository=fit4110/notification-service Tag=lab04 ID=961259348945 Size=268MB

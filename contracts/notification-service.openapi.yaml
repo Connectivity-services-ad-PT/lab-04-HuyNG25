@@ -1,0 +1,419 @@
+openapi: 3.1.0
+info:
+  title: Multi-Channel Alert Service API (Notification Service - B7)
+  version: 1.1.0
+  description: |
+    API chính thức cho phân hệ dịch vụ cảnh báo đa kênh (B7).
+    Hệ thống hỗ trợ tiếp nhận các yêu cầu cảnh báo từ Core Business (B6) hoặc AI Vision thông qua HTTP REST,
+    xử lý chống trùng lặp dữ liệu, kiểm tra cấu hình người dùng, và thực hiện gửi thông báo đa kênh (SMS, Email, Push).
+  contact:
+    name: FIT4110 Team Notify
+    email: notify-b7@example.edu.vn
+
+servers:
+  - url: http://localhost:4010
+    description: Prism mock server phục vụ Lab 03/04
+  - url: http://localhost:8000
+    description: Service thật chạy local hoặc Docker container
+  - url: https://api.campus.local
+    description: Môi trường deploy thực tế hệ thống Smart Campus
+
+tags:
+  - name: health
+    description: Kiểm tra trạng thái hoạt động nội bộ của Service
+  - name: alerts
+    description: Tiếp nhận và quản lý trạng thái các luồng cảnh báo an ninh
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  # ==================== PATH 1: HEALTH CHECK ====================
+  /health:
+    get:
+      operationId: getHealth
+      summary: Kiểm tra sức khỏe hệ thống
+      description: Kiểm tra xem service B7 có đang hoạt động bình thường hay không trước khi chạy tích hợp.
+      tags:
+        - health
+      security: [] # Miễn trừ kiểm tra token đối với health check
+      responses:
+        '200':
+          description: Service hoạt động ổn định.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              examples:
+                ok:
+                  value:
+                    status: "ok"
+                    service: "notification-service"
+                    time: "2026-06-08T23:00:00Z"
+
+  # ==================== PATH 2: POST ALERT ====================
+  /alerts:
+    post:
+      operationId: createAlert
+      summary: Tiếp nhận yêu cầu gửi cảnh báo an ninh
+      description: |
+        Endpoint tiếp nhận payload sự kiện. Cấu trúc dữ liệu yêu cầu bắt buộc phải ánh xạ khớp 100% 
+        với đặc tả nghiệp vụ lõi (Core Business) nhằm xử lý điều hướng tin nhắn.
+      tags:
+        - alerts
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Khóa chống gửi trùng lặp trên HTTP layer.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertPayload'
+            examples:
+              criticalAccessAlert:
+                value:
+                  eventId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2babc"
+                  eventType: "core.alert.created"
+                  occurredAt: "2026-06-08T23:15:00Z"
+                  correlationId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2aaaa"
+                  source: "core-business"
+                  data:
+                    alertId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2bcde"
+                    severity: "HIGH"
+                    message: "Phát hiện xâm nhập trái phép tại khu vực cổng chính tòa IT"
+                    targetUserId: "SV-12345"
+      responses:
+        '202':
+          description: Yêu cầu đã được tiếp nhận hợp lệ và đưa vào hàng đợi xử lý ngầm.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationAccepted'
+              examples:
+                accepted:
+                  value:
+                    notificationId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2cccc"
+                    status: "PENDING"
+                    acceptedAt: "2026-06-08T23:15:05Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Xảy ra trùng lặp dữ liệu do trùng eventId.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==================== PATH 3: GET RECENT ALERTS ====================
+  /alerts/recent:
+    get:
+      operationId: getRecentAlerts
+      summary: Tra cứu lịch sử các cảnh báo vừa nhận
+      description: Lấy danh sách các thông báo đã gửi hoặc đang xử lý trong hệ thống.
+      tags:
+        - alerts
+      responses:
+        '200':
+          description: Trả về mảng danh sách chi tiết trạng thái gửi tin.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationStatusDetail'
+              examples:
+                empty:
+                  value: []
+                withItems:
+                  value:
+                    - notificationId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2cccc"
+                      alertId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2bcde"
+                      currentStatus: "PENDING"
+                      targetUserId: "SV-12345"
+                      sentAt: null
+                      errorMessage: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==================== PATH 4: USER PREFERENCES ====================
+  /notifications/preferences/{userId}:
+    put:
+      operationId: updateNotificationPreferences
+      summary: Thay đổi cấu hình nhận tin nhắn của người dùng
+      description: Cho phép người dùng bật/tắt nhận tin qua SMS, Email, Push.
+      tags:
+        - alerts
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "SV-12345"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferencesRequest'
+            examples:
+              enableAll:
+                value:
+                  enabledChannels: ["SMS", "EMAIL", "PUSH"]
+      responses:
+        '200':
+          description: Cập nhật cấu hình thành công.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated]
+                properties:
+                  updated:
+                    type: boolean
+                    example: true
+              examples:
+                ok:
+                  value:
+                    updated: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Dữ liệu gửi lên sai định dạng hoặc thiếu trường bắt buộc.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            badRequest:
+              value:
+                type: "https://api.campus.local/errors/bad-request"
+                title: "Bad Request"
+                status: 400
+                detail: "Trường 'eventId' là bắt buộc."
+    Unauthorized:
+      description: Request không có quyền truy cập do thiếu Token hoặc Token không hợp lệ.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            unauthorized:
+              value:
+                type: "https://api.campus.local/errors/unauthorized"
+                title: "Unauthorized"
+                status: 401
+                detail: "Missing Authorization header."
+    NotFound:
+      description: Không tìm thấy thực thể hoặc tài nguyên yêu cầu.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableEntity:
+      description: Lỗi logic nghiệp vụ (ví dụ tài khoản không tồn tại, message quá ngắn).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            shortMessage:
+              value:
+                type: "https://api.campus.local/errors/validation-error"
+                title: "Unprocessable Entity"
+                status: 422
+                detail: "body.data.message: String should have at least 5 characters"
+    TooManyRequests:
+      description: Hệ thống kích hoạt cơ chế Rate Limit phòng chống Spam.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalServerError:
+      description: Lỗi hệ thống không xác định.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+
+    HealthStatus:
+      type: object
+      additionalProperties: false
+      required: [status, service, time]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+        time:
+          type: string
+          format: date-time
+
+    AlertSeverity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    AlertPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - eventType
+        - occurredAt
+        - correlationId
+        - source
+        - data
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: ID duy nhất của Event dùng làm Deduplication ID.
+        eventType:
+          type: string
+          enum: [core.alert.created]
+        occurredAt:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+          format: uuid
+        source:
+          type: string
+          example: "core-business"
+        data:
+          type: object
+          required:
+            - alertId
+            - severity
+            - message
+            - targetUserId
+          properties:
+            alertId:
+              type: string
+              format: uuid
+            severity:
+              $ref: '#/components/schemas/AlertSeverity'
+            message:
+              type: string
+              minLength: 5
+              example: "Phát hiện sinh viên quẹt thẻ khóa"
+            targetUserId:
+              type: string
+              example: "SV-12345"
+
+    NotificationAccepted:
+      type: object
+      additionalProperties: false
+      required: [notificationId, status, acceptedAt]
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING]
+        acceptedAt:
+          type: string
+          format: date-time
+
+    NotificationStatusDetail:
+      type: object
+      additionalProperties: false
+      required: [notificationId, alertId, currentStatus, targetUserId]
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        alertId:
+          type: string
+          format: uuid
+        currentStatus:
+          type: string
+          enum: [PENDING, SENT, FAILED]
+        targetUserId:
+          type: string
+          example: "SV-12345"
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+          example: "SMS Gateway Timeout"
+
+    UpdatePreferencesRequest:
+      type: object
+      additionalProperties: false
+      required: [enabledChannels]
+      properties:
+        enabledChannels:
+          type: array
+          uniqueItems: true
+          minItems: 1
+          items:
+            type: string
+            enum: [SMS, EMAIL, PUSH]
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://api.campus.local/errors/bad-request"
+        title:
+          type: string
+          example: "Invalid Request Payload"
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          example: 400
+        detail:
+          type: string
+          nullable: true
+          example: "Trường 'data.severity' sai quy định Enum hệ thống."
+        instance:
+          type: string
+          format: uri
+          nullable: true

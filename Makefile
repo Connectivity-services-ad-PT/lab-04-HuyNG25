@@ -1,5 +1,5 @@
-IMAGE_NAME ?= fit4110/iot-ingestion:lab04
-CONTAINER_NAME ?= fit4110-iot-lab04
+IMAGE_NAME ?= fit4110/notification-service:lab04
+CONTAINER_NAME ?= fit4110-notify-lab04
 PORT ?= 8000
 
 install:
@@ -9,7 +9,7 @@ lint:
 	npm run lint:openapi
 
 mock:
-	npm run mock:iot
+	npm run mock:notify
 
 test-mock:
 	npm run test:mock
@@ -34,3 +34,6 @@ stop:
 
 clean-reports:
 	rm -f reports/*.xml reports/*.html reports/*.json
+
+tag:
+	docker tag $(IMAGE_NAME) ghcr.io/$(OWNER)/team-notify:v0.1.0-team-notify

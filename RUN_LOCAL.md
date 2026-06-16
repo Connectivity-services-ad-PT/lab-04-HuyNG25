@@ -1,45 +1,52 @@
-# RUN_LOCAL.md – Hướng dẫn chạy Lab 04
+# RUN_LOCAL.md – Notification Service (B7) Lab 04
 
-Tài liệu này giúp người khác clone repo sạch và chạy lại service trong Docker.
+Hướng dẫn chạy lại toàn bộ Lab 04 từ đầu trong **5 bước**.
 
 ---
 
-## 1. Clone repo
+## Yêu cầu cài trước
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) hoặc Docker Engine
+- [Node.js 20 LTS](https://nodejs.org/) + npm
+- Git
+
+---
+
+## Bước 1 – Clone repo và cài dependencies
 
 ```bash
 git clone <repo-url>
-cd FIT4110_lab04_docker_packaging
-```
-
----
-
-## 2. Cài dependencies cho Newman/Prism/Spectral
-
-```bash
+cd lab-04-HuyNG25
 npm install
 ```
 
 ---
 
-## 3. Build Docker image
+## Bước 2 – Build Docker image
 
 ```bash
-docker build -t fit4110/iot-ingestion:lab04 .
+docker build -t fit4110/notification-service:lab04 .
+```
+
+Kiểm tra image đã build:
+
+```bash
+docker images | grep notification-service
 ```
 
 ---
 
-## 4. Run container
+## Bước 3 – Chạy container
 
 ```bash
 docker run --rm \
-  --name fit4110-iot-lab04 \
+  --name fit4110-notify-lab04 \
   -p 8000:8000 \
   --env-file .env.example \
-  fit4110/iot-ingestion:lab04
+  fit4110/notification-service:lab04
 ```
 
-Mở terminal khác, kiểm tra:
+Kiểm tra container đang chạy và `/health` trả `200`:
 
 ```bash
 curl http://localhost:8000/health
@@ -48,45 +55,61 @@ curl http://localhost:8000/health
 Kết quả mong đợi:
 
 ```json
-{
-  "status": "ok",
-  "service": "iot-ingestion",
-  "version": "0.4.0"
-}
+{"status": "ok", "service": "notification-service", "time": "..."}
 ```
 
 ---
 
-## 5. Chạy Newman test trên container
+## Bước 4 – Chạy Newman tests
+
+Mở terminal mới (giữ container chạy ở terminal cũ), rồi:
 
 ```bash
 npm run test:local
 ```
 
-Report sinh tại:
+Hoặc dùng script:
 
-```text
+```bash
+bash scripts/run-newman.sh local
+```
+
+---
+
+## Bước 5 – Xem report
+
+Report được sinh ra tại:
+
+```
 reports/newman-lab04-local.xml
 reports/newman-lab04-local.html
 ```
 
+Mở file HTML trong trình duyệt để xem kết quả trực quan.
+
 ---
 
-## 6. Dừng container
-
-Nếu không dùng `--rm` hoặc container còn chạy:
+## Lệnh nhanh
 
 ```bash
-docker stop fit4110-iot-lab04
+# Dừng container
+docker stop fit4110-notify-lab04
+
+# Chạy lại test trên mock server (không cần Docker)
+npm run mock:notify          # terminal 1
+npm run test:mock            # terminal 2
+
+# Dọn report cũ
+make clean-reports
 ```
 
 ---
 
-## 7. Lệnh nhanh
+## Tag image (nộp bài)
 
 ```bash
-make build
-make run
-make test-docker
-make stop
+docker tag fit4110/notification-service:lab04 \
+  ghcr.io/<owner>/team-notify:v0.1.0-team-notify
+
+docker push ghcr.io/<owner>/team-notify:v0.1.0-team-notify
 ```

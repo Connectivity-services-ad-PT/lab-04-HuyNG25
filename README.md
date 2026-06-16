@@ -1,8 +1,8 @@
-# FIT4110_lab04_docker_packaging
+# FIT4110_lab04_docker_packaging – B7 Notification Service
 
 **Học phần:** FIT4110 – Dịch vụ kết nối và Công nghệ nền tảng  
 **Buổi 4:** Đóng gói service với Docker & tư duy công nghệ nền tảng  
-**Case study:** Smart Campus Operations Platform  
+**Nhóm:** `team-notify` – Phân hệ B7 Multi-Channel Alert Service  
 **Repo nền:** `FIT4110_lab03_postman_mock_testing`
 
 > Lab 03 đã có OpenAPI contract, Postman Collection, Mock Server và Newman report.  
@@ -30,22 +30,29 @@ OpenAPI Contract
 → Evidence
 ```
 
-Lab 04 hiện đã đồng bộ lại với contract IoT của Lab 03 theo payload:
+Lab 04 đã đồng bộ lại với contract B7 Notification Service của Lab 03 theo payload:
 
 ```json
 {
-  "device_id": "ESP32-LAB-A01",
-  "metric": "temperature",
-  "value": 31.5,
-  "unit": "celsius",
-  "timestamp": "2026-05-13T08:30:00+07:00"
+  "eventId": "0196fb3d-4ad7-7d1e-9f49-5d5148d2babc",
+  "eventType": "core.alert.created",
+  "occurredAt": "2026-06-08T23:15:00Z",
+  "correlationId": "0196fb3d-4ad7-7d1e-9f49-5d5148d2aaaa",
+  "source": "core-business",
+  "data": {
+    "alertId": "0196fb3d-4ad7-7d1e-9f49-5d5148d2bcde",
+    "severity": "HIGH",
+    "message": "Phát hiện xâm nhập trái phép tại khu vực cổng chính tòa IT",
+    "targetUserId": "SV-12345"
+  }
 }
 ```
 
 Boundary dùng trong bài:
 
 ```text
-temperature: -40 đến 80
+message: minLength=5
+severity: LOW | MEDIUM | HIGH | CRITICAL
 ```
 
 Thông điệp chính của buổi học:
@@ -88,11 +95,11 @@ FIT4110_lab04_docker_packaging/
 ├── package.json
 ├── requirements.txt
 ├── src/
-│   └── iot_app/
+│   └── notification_app/
 │       ├── __init__.py
 │       └── main.py
 ├── contracts/
-│   └── iot-ingestion.openapi.yaml
+│   └── notification-service.openapi.yaml
 ├── postman/
 │   ├── collections/
 │   │   └── FIT4110_lab04_iot_docker.postman_collection.json
@@ -153,7 +160,7 @@ pip install -r requirements.txt
 Chạy API:
 
 ```bash
-uvicorn iot_app.main:app --app-dir src --host 0.0.0.0 --port 8000
+uvicorn notification_app.main:app --app-dir src --host 0.0.0.0 --port 8000
 ```
 
 Kiểm tra:
@@ -169,17 +176,17 @@ curl http://localhost:8000/health
 Build image:
 
 ```bash
-docker build -t fit4110/iot-ingestion:lab04 .
+docker build -t fit4110/notification-service:lab04 .
 ```
 
 Run container:
 
 ```bash
 docker run --rm \
-  --name fit4110-iot-lab04 \
+  --name fit4110-notify-lab04 \
   -p 8000:8000 \
   --env-file .env.example \
-  fit4110/iot-ingestion:lab04
+  fit4110/notification-service:lab04
 ```
 
 Kiểm tra health:
@@ -269,7 +276,7 @@ v0.1.0-<team>
 Ví dụ:
 
 ```bash
-docker tag fit4110/iot-ingestion:lab04 ghcr.io/<owner>/team-iot:v0.1.0-team-iot
+docker tag fit4110/notification-service:lab04 ghcr.io/<owner>/team-notify:v0.1.0-team-notify
 ```
 
 ---
@@ -281,13 +288,13 @@ Dockerfile
 .dockerignore
 .env.example
 RUN_LOCAL.md
-contracts/<team>.openapi.yaml
-postman/collections/<team>.postman_collection.json
-postman/environments/<team>_local.postman_environment.json
+contracts/notification-service.openapi.yaml
+postman/collections/FIT4110_lab04_iot_docker.postman_collection.json
+postman/environments/FIT4110_lab04_local.postman_environment.json
 reports/newman-lab04-local.xml
 reports/newman-lab04-local.html
 ảnh chụp /health hoặc log container
-tag image đã push lên registry
+tag image đã push lên registry (fit4110/notification-service:lab04)
 ```
 
 ---

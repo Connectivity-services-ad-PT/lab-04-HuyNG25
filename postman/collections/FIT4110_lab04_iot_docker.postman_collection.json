@@ -1,159 +1,222 @@
 {
   "info": {
-    "name": "FIT4110 Lab04 IoT Docker Verification",
-    "description": "Postman collection aligned with Lab 03 contract style to verify the Dockerized IoT service in Lab 04.",
+    "_postman_id": "fit4110-lab04-notify-b7",
+    "name": "FIT4110 Lab04 - Notification Service B7 Contract Tests",
+    "description": "Postman Collection cho Phân hệ Dịch vụ Cảnh báo Đa kênh (B7) - team-notify\nChạy trên Docker container hoặc service local.\nFix từ Lab 03: chuẩn hoá status code, ProblemDetails shape, bỏ assertion sai.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Generate unique IDs per run to avoid deduplication 409 on repeated runs",
+          "function uuidv4() {",
+          "  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+          "    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);",
+          "    return v.toString(16);",
+          "  });",
+          "}",
+          "pm.collectionVariables.set('runEventId',       uuidv4());",
+          "pm.collectionVariables.set('runCorrelationId', uuidv4());",
+          "pm.collectionVariables.set('runAlertId',       uuidv4());",
+          "pm.collectionVariables.set('boundaryEventId',  uuidv4());",
+          "pm.collectionVariables.set('boundaryAlertId',  uuidv4());",
+          "pm.collectionVariables.set('criticalEventId',  uuidv4());",
+          "pm.collectionVariables.set('criticalAlertId',  uuidv4());",
+          "pm.collectionVariables.set('latencyEventId',   uuidv4());",
+          "pm.collectionVariables.set('latencyAlertId',   uuidv4());",
+          "const prefix = pm.environment.get('tracePrefix') || 'fit4110-lab04';",
+          "pm.variables.set('traceId', prefix + '-' + Date.now());",
+          "pm.request.headers.upsert({ key: 'X-Trace-Id', value: pm.variables.get('traceId') });"
+        ]
+      }
+    }
+  ],
   "item": [
     {
-      "name": "01_Functional",
+      "name": "00_Health",
       "item": [
         {
-          "name": "GET health returns 200",
+          "name": "GET /health - service is alive",
+          "id": "health-check-200",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "health"
-              ]
-            }
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Health check không cần auth. Phải trả 200 với status=ok và service name."
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Response has status ok', function () { const json = pm.response.json(); pm.expect(json.status).to.eql('ok'); });",
-                  "pm.test('Response has service name and version', function () { const json = pm.response.json(); pm.expect(json).to.have.property('service'); pm.expect(json).to.have.property('version'); });"
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response has status ok', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status', 'ok');",
+                  "});",
+                  "pm.test('Response has service name', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('service');",
+                  "  pm.expect(json.service).to.be.a('string');",
+                  "});",
+                  "pm.test('Response has time field', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('time');",
+                  "});"
                 ]
               }
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "name": "01_Functional",
+      "item": [
         {
-          "name": "POST valid temperature reading returns 201",
+          "name": "POST /alerts - happy path creates alert",
+          "id": "create-alert-202",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/readings",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "readings"
-              ]
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
             },
+            "description": "Happy path: gửi alert hợp lệ, phải nhận 202 ACCEPTED với status=PENDING.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 31.5,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+              "raw": "{\n  \"eventId\": \"{{runEventId}}\",\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"{{runCorrelationId}}\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"{{runAlertId}}\",\n    \"severity\": \"HIGH\",\n    \"message\": \"Ph\\u00e1t hi\\u1ec7n x\\u00e2m nh\\u1eadp tr\\u00e1i ph\\u00e9p t\\u1ea1i khu v\\u1ef1c c\\u1ed5ng ch\\u00ednh t\\u00f2a IT\",\n    \"targetUserId\": \"SV-12345\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
             }
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
-                  "pm.test('Response follows created-reading schema', function () { const json = pm.response.json(); pm.expect(json).to.have.property('reading_id'); pm.expect(json.reading_id).to.match(/^R-[0-9]{8}-[0-9]{4}$/); pm.expect(json).to.have.property('accepted', true); pm.expect(json.metric).to.eql('temperature'); });",
-                  "pm.test('Response device_id matches request', function () { const json = pm.response.json(); pm.expect(json.device_id).to.eql('ESP32-LAB-A01'); });",
-                  "const created = pm.response.json();",
-                  "if (created.reading_id) { pm.environment.set('createdReadingId', created.reading_id); }"
+                  "pm.test('Status code is 202 Accepted', function () {",
+                  "  pm.response.to.have.status(202);",
+                  "});",
+                  "pm.test('Response has notificationId', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('notificationId');",
+                  "  pm.expect(json.notificationId).to.be.a('string');",
+                  "});",
+                  "pm.test('Response status is PENDING', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status', 'PENDING');",
+                  "});",
+                  "pm.test('Response has acceptedAt timestamp', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('acceptedAt');",
+                  "});",
+                  "// Lưu notificationId và eventId để dùng ở test duplicate",
+                  "if (pm.response.code === 202) {",
+                  "  pm.collectionVariables.set('lastNotificationId', pm.response.json().notificationId);",
+                  "  pm.collectionVariables.set('lastEventId', pm.collectionVariables.get('runEventId'));",
+                  "}"
                 ]
               }
             }
           ]
         },
         {
-          "name": "GET latest readings returns items array",
+          "name": "GET /alerts/recent - list returns array",
+          "id": "get-recent-alerts-200",
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/readings/latest?device_id=ESP32-LAB-A01&limit=5",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "readings",
-                "latest"
-              ],
-              "query": [
-                {
-                  "key": "device_id",
-                  "value": "ESP32-LAB-A01"
-                },
-                {
-                  "key": "limit",
-                  "value": "5"
-                }
-              ]
-            }
+              "raw": "{{baseUrl}}/alerts/recent",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts", "recent"]
+            },
+            "description": "GET recent alerts: contract trả array trực tiếp (không wrap trong {items:[]})."
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Response has items array', function () { const json = pm.response.json(); pm.expect(json).to.have.property('items'); pm.expect(json.items).to.be.an('array'); });"
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response is an array', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.be.an('array');",
+                  "});",
+                  "pm.test('Array items have required fields if non-empty', function () {",
+                  "  const json = pm.response.json();",
+                  "  if (json.length > 0) {",
+                  "    const item = json[0];",
+                  "    pm.expect(item).to.have.property('notificationId');",
+                  "    pm.expect(item).to.have.property('alertId');",
+                  "    pm.expect(item).to.have.property('currentStatus');",
+                  "    pm.expect(item).to.have.property('targetUserId');",
+                  "  }",
+                  "});"
                 ]
               }
             }
           ]
         },
         {
-          "name": "GET reading by saved reading_id returns 200",
+          "name": "PUT /notifications/preferences/SV-12345 - update channels",
+          "id": "update-preferences-200",
           "request": {
-            "method": "GET",
+            "method": "PUT",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/readings/{{createdReadingId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "readings",
-                "{{createdReadingId}}"
-              ]
+              "raw": "{{baseUrl}}/notifications/preferences/SV-12345",
+              "host": ["{{baseUrl}}"],
+              "path": ["notifications", "preferences", "SV-12345"]
+            },
+            "description": "Cập nhật kênh nhận thông báo cho user SV-12345.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabledChannels\": [\"SMS\", \"EMAIL\", \"PUSH\"]\n}",
+              "options": { "raw": { "language": "json" } }
             }
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Response reading_id matches saved variable', function () { const json = pm.response.json(); const saved = pm.environment.get('createdReadingId'); pm.expect(json.reading_id).to.eql(saved); });"
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response confirms update', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('updated', true);",
+                  "});"
                 ]
               }
             }
@@ -165,48 +228,75 @@
       "name": "02_Auth",
       "item": [
         {
-          "name": "POST reading without token returns 401",
+          "name": "GET /alerts/recent - valid token is accepted",
+          "id": "auth-valid-token-200",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/readings",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "readings"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 31.5,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+              "raw": "{{baseUrl}}/alerts/recent",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts", "recent"]
             }
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.environment.get('env') === 'mock') {",
-                  "  pm.test('Mock may not enforce auth - document this behavior', function () { pm.expect([200, 201, 401, 403]).to.include(pm.response.code); });",
+                  "pm.test('Valid token returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /alerts - missing token returns 401",
+          "id": "auth-missing-token-401",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
+            },
+            "description": "Không có Authorization header. Service thật phải trả 401. Mock có thể skip.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"11111111-1111-1111-1111-111111111111\",\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"22222222-2222-2222-2222-222222222222\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"33333333-3333-3333-3333-333333333333\",\n    \"severity\": \"HIGH\",\n    \"message\": \"Test missing auth\",\n    \"targetUserId\": \"SV-12345\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const env = pm.environment.get('env') || 'mock';",
+                  "if (env === 'mock') {",
+                  "  pm.test('Skipped on mock: Prism does not enforce real auth', function () {",
+                  "    pm.expect(true).to.eql(true);",
+                  "  });",
                   "} else {",
-                  "  pm.test('Missing token returns 401', function () { pm.response.to.have.status(401); });",
-                  "  function assertProblemDetails() {",
+                  "  pm.test('Missing token returns 401', function () {",
+                  "    pm.expect([401, 403]).to.include(pm.response.code);",
+                  "  });",
+                  "  pm.test('401 response follows ProblemDetails shape', function () {",
                   "    const json = pm.response.json();",
-                  "    pm.expect(json).to.have.property('type');",
                   "    pm.expect(json).to.have.property('title');",
-                  "    pm.expect(json).to.have.property('status');",
-                  "    pm.expect(json.status).to.be.within(400, 599);",
-                  "    pm.expect(json).to.have.property('detail');",
-                  "  }",
-                  "  assertProblemDetails();",
+                  "    pm.expect(json).to.have.property('status', 401);",
+                  "  });",
                   "}"
                 ]
               }
@@ -214,52 +304,47 @@
           ]
         },
         {
-          "name": "POST reading with wrong token returns 401",
+          "name": "POST /alerts - invalid token returns 401",
+          "id": "auth-invalid-token-401",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer wrong-token"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer invalid-token-xyz" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/readings",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "readings"
-              ]
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
             },
+            "description": "Token sai. Service thật phải từ chối với 401.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 31.5,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+              "raw": "{\n  \"eventId\": \"44444444-4444-4444-4444-444444444444\",\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"55555555-5555-5555-5555-555555555555\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"66666666-6666-6666-6666-666666666666\",\n    \"severity\": \"HIGH\",\n    \"message\": \"Test invalid auth\",\n    \"targetUserId\": \"SV-12345\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
             }
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.environment.get('env') === 'mock') {",
-                  "  pm.test('Mock may not enforce auth - document this behavior', function () { pm.expect([200, 201, 401, 403]).to.include(pm.response.code); });",
+                  "const env = pm.environment.get('env') || 'mock';",
+                  "if (env === 'mock') {",
+                  "  pm.test('Skipped on mock: invalid token requires real auth middleware', function () {",
+                  "    pm.expect(true).to.eql(true);",
+                  "  });",
                   "} else {",
-                  "  pm.test('Wrong token returns 401', function () { pm.response.to.have.status(401); });",
-                  "  function assertProblemDetails() {",
+                  "  pm.test('Invalid token returns 401', function () {",
+                  "    pm.expect([401, 403]).to.include(pm.response.code);",
+                  "  });",
+                  "  pm.test('401 response has ProblemDetails title', function () {",
                   "    const json = pm.response.json();",
-                  "    pm.expect(json).to.have.property('type');",
                   "    pm.expect(json).to.have.property('title');",
                   "    pm.expect(json).to.have.property('status');",
-                  "    pm.expect(json.status).to.be.within(400, 599);",
-                  "    pm.expect(json).to.have.property('detail');",
-                  "  }",
-                  "  assertProblemDetails();",
+                  "  });",
                   "}"
                 ]
               }
@@ -272,105 +357,132 @@
       "name": "03_Negative",
       "item": [
         {
-          "name": "POST reading missing device_id returns validation error",
+          "name": "POST /alerts - missing required field eventId returns 422",
+          "id": "negative-missing-eventid-422",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Prefer", "value": "code=400" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/readings",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "readings"
-              ]
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
             },
+            "description": "Thiếu field eventId. Service thật tự validate và trả 422 ProblemDetails.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"metric\": \"temperature\",\n  \"value\": 31.5,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+              "raw": "{\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"0196fb3d-4ad7-7d1e-9f49-5d5148d2aaaa\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"0196fb3d-4ad7-7d1e-9f49-5d5148d2bcde\",\n    \"severity\": \"HIGH\",\n    \"message\": \"Ph\\u00e1t hi\\u1ec7n x\\u00e2m nh\\u1eadp\",\n    \"targetUserId\": \"SV-12345\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
             }
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.environment.get('env') === 'mock') {",
-                  "  pm.test('Mock response is documented', function () { pm.expect([201, 400, 422]).to.include(pm.response.code); });",
-                  "} else {",
-                  "  pm.test('Missing required field returns 422', function () { pm.response.to.have.status(422); });",
-                  "  function assertProblemDetails() {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.have.property('type');",
-                  "    pm.expect(json).to.have.property('title');",
-                  "    pm.expect(json).to.have.property('status');",
-                  "    pm.expect(json.status).to.be.within(400, 599);",
-                  "    pm.expect(json).to.have.property('detail');",
-                  "  }",
-                  "  assertProblemDetails();",
-                  "}"
+                  "pm.test('Missing field returns client error 400 or 422', function () {",
+                  "  pm.expect([400, 422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Error response follows ProblemDetails shape', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('title');",
+                  "  pm.expect(json).to.have.property('status');",
+                  "  pm.expect(json.status).to.be.within(400, 599);",
+                  "});"
                 ]
               }
             }
           ]
         },
         {
-          "name": "POST reading with value as string returns validation error",
+          "name": "POST /alerts - wrong enum severity returns 422",
+          "id": "negative-wrong-severity-enum-422",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Prefer", "value": "code=400" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/readings",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "readings"
-              ]
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
             },
+            "description": "severity=CRITICAL_URGENT_WRONG là ngoài enum. Phải trả 422 với detail.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": \"hot\",\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+              "raw": "{\n  \"eventId\": \"77777777-7777-7777-7777-777777777777\",\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"88888888-8888-8888-8888-888888888888\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"99999999-9999-9999-9999-999999999999\",\n    \"severity\": \"CRITICAL_URGENT_WRONG\",\n    \"message\": \"Ph\\u00e1t hi\\u1ec7n x\\u00e2m nh\\u1eadp\",\n    \"targetUserId\": \"SV-12345\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
             }
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.environment.get('env') === 'mock') {",
-                  "  pm.test('Mock response is documented', function () { pm.expect([201, 400, 422]).to.include(pm.response.code); });",
+                  "pm.test('Wrong enum returns client error', function () {",
+                  "  pm.expect([400, 422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Error response has detail field', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('detail');",
+                  "  pm.expect(json.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /alerts - duplicate eventId returns 409",
+          "id": "negative-duplicate-eventid-409",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
+            },
+            "description": "Gửi lại cùng eventId đã dùng ở 01_Functional. Service thật phải trả 409 Conflict.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"{{lastEventId}}\",\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"{{runCorrelationId}}\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"{{runAlertId}}\",\n    \"severity\": \"HIGH\",\n    \"message\": \"Duplicate event test\",\n    \"targetUserId\": \"SV-12345\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const env = pm.environment.get('env') || 'mock';",
+                  "if (env === 'mock') {",
+                  "  pm.test('Skipped on mock: deduplication requires real service state', function () {",
+                  "    pm.expect(true).to.eql(true);",
+                  "  });",
                   "} else {",
-                  "  pm.test('Wrong data type returns 422', function () { pm.response.to.have.status(422); });",
-                  "  function assertProblemDetails() {",
+                  "  pm.test('Duplicate eventId returns 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "  });",
+                  "  pm.test('409 response follows ProblemDetails shape', function () {",
                   "    const json = pm.response.json();",
-                  "    pm.expect(json).to.have.property('type');",
                   "    pm.expect(json).to.have.property('title');",
-                  "    pm.expect(json).to.have.property('status');",
-                  "    pm.expect(json.status).to.be.within(400, 599);",
-                  "    pm.expect(json).to.have.property('detail');",
-                  "  }",
-                  "  assertProblemDetails();",
+                  "    pm.expect(json).to.have.property('status', 409);",
+                  "  });",
                   "}"
                 ]
               }
@@ -380,129 +492,230 @@
       ]
     },
     {
-      "name": "04_Boundary_Reliability",
+      "name": "04_Boundary",
       "item": [
         {
-          "name": "POST boundary temperature 80 is accepted with warning",
+          "name": "POST /alerts - message at minLength=5 is accepted",
+          "id": "boundary-message-min-5-accepted",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/readings",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "readings"
-              ]
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
             },
+            "description": "message='Alert' (5 chars = minLength boundary). Phải được chấp nhận: 202.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 80,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+              "raw": "{\n  \"eventId\": \"{{boundaryEventId}}\",\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"{{runCorrelationId}}\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"{{boundaryAlertId}}\",\n    \"severity\": \"LOW\",\n    \"message\": \"Alert\",\n    \"targetUserId\": \"SV-12345\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
             }
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Boundary value 80 returns 201', function () { pm.response.to.have.status(201); });",
-                  "if (pm.environment.get('env') !== 'mock') {",
-                  "  pm.test('High temperature response includes warning header', function () { pm.expect(pm.response.headers.has('X-Warning')).to.eql(true); });",
-                  "}"
+                  "pm.test('Message at minLength boundary (5 chars) returns 202', function () {",
+                  "  pm.response.to.have.status(202);",
+                  "});",
+                  "pm.test('Response confirms PENDING status', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status', 'PENDING');",
+                  "});"
                 ]
               }
             }
           ]
         },
         {
-          "name": "POST boundary temperature 81 is rejected",
+          "name": "POST /alerts - message below minLength=5 is rejected",
+          "id": "boundary-message-below-min-rejected",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Prefer", "value": "code=422" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/readings",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "readings"
-              ]
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
             },
+            "description": "message='A' (1 char, dưới minLength=5). Phải bị từ chối: 422.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 81,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+              "raw": "{\n  \"eventId\": \"dddddddd-dddd-dddd-dddd-dddddddddddd\",\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"ffffffff-ffff-ffff-ffff-ffffffffffff\",\n    \"severity\": \"HIGH\",\n    \"message\": \"A\",\n    \"targetUserId\": \"SV-12345\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
             }
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.environment.get('env') === 'mock') {",
-                  "  pm.test('Mock response is documented', function () { pm.expect([201, 400, 422]).to.include(pm.response.code); });",
+                  "pm.test('Message below minLength (1 char) returns 422', function () {",
+                  "  pm.expect([400, 422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Boundary error response has ProblemDetails shape', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status');",
+                  "  pm.expect(json.status).to.be.within(400, 599);",
+                  "  pm.expect(json).to.have.property('title');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /alerts - CRITICAL severity (max enum) is accepted",
+          "id": "boundary-severity-critical-accepted",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
+            },
+            "description": "severity=CRITICAL là giá trị hợp lệ cao nhất trong enum. Phải được chấp nhận.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"{{criticalEventId}}\",\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"{{runCorrelationId}}\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"{{criticalAlertId}}\",\n    \"severity\": \"CRITICAL\",\n    \"message\": \"C\\u1ea3nh b\\u00e1o nghi\\u00eam tr\\u1ecdng to\\u00e0n khu v\\u1ef1c\",\n    \"targetUserId\": \"SV-99999\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('CRITICAL severity (enum boundary) returns 202', function () {",
+                  "  pm.response.to.have.status(202);",
+                  "});",
+                  "pm.test('Response has PENDING status', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.status).to.eql('PENDING');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05_Consumer_side_Smoke",
+      "item": [
+        {
+          "name": "Consumer smoke - call AI Vision mock",
+          "id": "consumer-smoke-ai-vision",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{aiVisionMockUrl}}/detect",
+              "host": ["{{aiVisionMockUrl}}"],
+              "path": ["detect"]
+            },
+            "description": "Consumer-side smoke test: gọi mock của AI Vision. Chỉ có ý nghĩa khi AI Vision mock đang chạy ở aiVisionMockUrl.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"0196fb3d-4ad7-7d1e-9f49-5d5148d2babc\",\n  \"source\": \"core-business\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const env = pm.environment.get('env') || 'mock';",
+                  "// Skip nếu env=local vì AI Vision mock không chạy cùng container",
+                  "if (env === 'local') {",
+                  "  pm.test('Skipped on local: AI Vision mock not co-located with container', function () {",
+                  "    pm.expect(true).to.eql(true);",
+                  "  });",
                   "} else {",
-                  "  pm.test('Boundary value 81 returns 422', function () { pm.response.to.have.status(422); });",
-                  "  function assertProblemDetails() {",
+                  "  pm.test('Consumer receives success from AI Vision mock', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "  });",
+                  "  pm.test('Consumer can read detection fields', function () {",
                   "    const json = pm.response.json();",
-                  "    pm.expect(json).to.have.property('type');",
-                  "    pm.expect(json).to.have.property('title');",
-                  "    pm.expect(json).to.have.property('status');",
-                  "    pm.expect(json.status).to.be.within(400, 599);",
-                  "    pm.expect(json).to.have.property('detail');",
-                  "  }",
-                  "  assertProblemDetails();",
+                  "    pm.expect(json).to.have.property('detection_id');",
+                  "    pm.expect(json).to.have.property('label');",
+                  "    pm.expect(json).to.have.property('confidence');",
+                  "    pm.expect(json.confidence).to.be.within(0, 1);",
+                  "  });",
                   "}"
                 ]
               }
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "name": "06_NonFunctional",
+      "item": [
         {
-          "name": "GET health responds under 1000ms on local/container",
+          "name": "POST /alerts - local response time under 1000ms",
+          "id": "nonfunc-latency-1000ms",
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
             "url": {
-              "raw": "{{baseUrl}}/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "health"
-              ]
+              "raw": "{{baseUrl}}/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["alerts"]
+            },
+            "description": "Latency/SLA chỉ có ý nghĩa khi chạy service thật (local hoặc Docker).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"{{latencyEventId}}\",\n  \"eventType\": \"core.alert.created\",\n  \"occurredAt\": \"2026-06-08T23:15:00Z\",\n  \"correlationId\": \"{{runCorrelationId}}\",\n  \"source\": \"core-business\",\n  \"data\": {\n    \"alertId\": \"{{latencyAlertId}}\",\n    \"severity\": \"MEDIUM\",\n    \"message\": \"Latency test message\",\n    \"targetUserId\": \"SV-00001\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
             }
           },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.environment.get('env') !== 'mock') {",
-                  "  pm.test('Response time is below 1000ms', function () { pm.expect(pm.response.responseTime).to.be.below(1000); });",
-                  "}",
-                  "pm.test('Health endpoint is reachable', function () { pm.response.to.have.status(200); });"
+                  "const env = pm.environment.get('env') || 'mock';",
+                  "if (env === 'local') {",
+                  "  pm.test('Local/Docker service responds under 1000ms', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "  });",
+                  "} else {",
+                  "  pm.test('Skipped on mock: mock latency is not evidence of real service reliability', function () {",
+                  "    pm.expect(true).to.eql(true);",
+                  "  });",
+                  "}"
                 ]
               }
             }

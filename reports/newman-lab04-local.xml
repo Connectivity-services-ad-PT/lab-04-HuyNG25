@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="FIT4110 Lab04 - Notification Service B7 Contract Tests" tests="15" time="0.106">
+  <testsuite name="00_Health / GET /health - service is alive" id="health-check-200" timestamp="2026-06-16T15:47:52.947Z" tests="4" failures="0" errors="0" time="0.028">
+    <testcase name="Status code is 200" time="0.028" classname="00HealthGetHealthServiceIsAlive"/>
+    <testcase name="Response has status ok" time="0.028" classname="00HealthGetHealthServiceIsAlive"/>
+    <testcase name="Response has service name" time="0.028" classname="00HealthGetHealthServiceIsAlive"/>
+    <testcase name="Response has time field" time="0.028" classname="00HealthGetHealthServiceIsAlive"/>
+  </testsuite>
+  <testsuite name="01_Functional / POST /alerts - happy path creates alert" id="create-alert-202" timestamp="2026-06-16T15:47:52.947Z" tests="4" failures="0" errors="0" time="0.007">
+    <testcase name="Status code is 202 Accepted" time="0.007" classname="01FunctionalPostAlertsHappyPathCreatesAlert"/>
+    <testcase name="Response has notificationId" time="0.007" classname="01FunctionalPostAlertsHappyPathCreatesAlert"/>
+    <testcase name="Response status is PENDING" time="0.007" classname="01FunctionalPostAlertsHappyPathCreatesAlert"/>
+    <testcase name="Response has acceptedAt timestamp" time="0.007" classname="01FunctionalPostAlertsHappyPathCreatesAlert"/>
+  </testsuite>
+  <testsuite name="01_Functional / GET /alerts/recent - list returns array" id="get-recent-alerts-200" timestamp="2026-06-16T15:47:52.947Z" tests="3" failures="0" errors="0" time="0.006">
+    <testcase name="Status code is 200" time="0.006" classname="01FunctionalGetAlertsRecentListReturnsArray"/>
+    <testcase name="Response is an array" time="0.006" classname="01FunctionalGetAlertsRecentListReturnsArray"/>
+    <testcase name="Array items have required fields if non-empty" time="0.006" classname="01FunctionalGetAlertsRecentListReturnsArray"/>
+  </testsuite>
+  <testsuite name="01_Functional / PUT /notifications/preferences/SV-12345 - update channels" id="update-preferences-200" timestamp="2026-06-16T15:47:52.947Z" tests="2" failures="0" errors="0" time="0.006">
+    <testcase name="Status code is 200" time="0.006" classname="01FunctionalPutNotificationsPreferencesSv12345UpdateChannels"/>
+    <testcase name="Response confirms update" time="0.006" classname="01FunctionalPutNotificationsPreferencesSv12345UpdateChannels"/>
+  </testsuite>
+  <testsuite name="02_Auth / GET /alerts/recent - valid token is accepted" id="auth-valid-token-200" timestamp="2026-06-16T15:47:52.947Z" tests="1" failures="0" errors="0" time="0.006">
+    <testcase name="Valid token returns 200" time="0.006" classname="02AuthGetAlertsRecentValidTokenIsAccepted"/>
+  </testsuite>
+  <testsuite name="02_Auth / POST /alerts - missing token returns 401" id="auth-missing-token-401" timestamp="2026-06-16T15:47:52.947Z" tests="2" failures="0" errors="0" time="0.006">
+    <testcase name="Missing token returns 401" time="0.006" classname="02AuthPostAlertsMissingTokenReturns401"/>
+    <testcase name="401 response follows ProblemDetails shape" time="0.006" classname="02AuthPostAlertsMissingTokenReturns401"/>
+  </testsuite>
+  <testsuite name="02_Auth / POST /alerts - invalid token returns 401" id="auth-invalid-token-401" timestamp="2026-06-16T15:47:52.947Z" tests="2" failures="0" errors="0" time="0.005">
+    <testcase name="Invalid token returns 401" time="0.005" classname="02AuthPostAlertsInvalidTokenReturns401"/>
+    <testcase name="401 response has ProblemDetails title" time="0.005" classname="02AuthPostAlertsInvalidTokenReturns401"/>
+  </testsuite>
+  <testsuite name="03_Negative / POST /alerts - missing required field eventId returns 422" id="negative-missing-eventid-422" timestamp="2026-06-16T15:47:52.947Z" tests="2" failures="0" errors="0" time="0.005">
+    <testcase name="Missing field returns client error 400 or 422" time="0.005" classname="03NegativePostAlertsMissingRequiredFieldEventIdReturns422"/>
+    <testcase name="Error response follows ProblemDetails shape" time="0.005" classname="03NegativePostAlertsMissingRequiredFieldEventIdReturns422"/>
+  </testsuite>
+  <testsuite name="03_Negative / POST /alerts - wrong enum severity returns 422" id="negative-wrong-severity-enum-422" timestamp="2026-06-16T15:47:52.947Z" tests="2" failures="0" errors="0" time="0.005">
+    <testcase name="Wrong enum returns client error" time="0.005" classname="03NegativePostAlertsWrongEnumSeverityReturns422"/>
+    <testcase name="Error response has detail field" time="0.005" classname="03NegativePostAlertsWrongEnumSeverityReturns422"/>
+  </testsuite>
+  <testsuite name="03_Negative / POST /alerts - duplicate eventId returns 409" id="negative-duplicate-eventid-409" timestamp="2026-06-16T15:47:52.947Z" tests="2" failures="0" errors="0" time="0.004">
+    <testcase name="Duplicate eventId returns 409 Conflict" time="0.004" classname="03NegativePostAlertsDuplicateEventIdReturns409"/>
+    <testcase name="409 response follows ProblemDetails shape" time="0.004" classname="03NegativePostAlertsDuplicateEventIdReturns409"/>
+  </testsuite>
+  <testsuite name="04_Boundary / POST /alerts - message at minLength=5 is accepted" id="boundary-message-min-5-accepted" timestamp="2026-06-16T15:47:52.947Z" tests="2" failures="0" errors="0" time="0.005">
+    <testcase name="Message at minLength boundary (5 chars) returns 202" time="0.005" classname="04BoundaryPostAlertsMessageAtMinLength5IsAccepted"/>
+    <testcase name="Response confirms PENDING status" time="0.005" classname="04BoundaryPostAlertsMessageAtMinLength5IsAccepted"/>
+  </testsuite>
+  <testsuite name="04_Boundary / POST /alerts - message below minLength=5 is rejected" id="boundary-message-below-min-rejected" timestamp="2026-06-16T15:47:52.947Z" tests="2" failures="0" errors="0" time="0.007">
+    <testcase name="Message below minLength (1 char) returns 422" time="0.007" classname="04BoundaryPostAlertsMessageBelowMinLength5IsRejected"/>
+    <testcase name="Boundary error response has ProblemDetails shape" time="0.007" classname="04BoundaryPostAlertsMessageBelowMinLength5IsRejected"/>
+  </testsuite>
+  <testsuite name="04_Boundary / POST /alerts - CRITICAL severity (max enum) is accepted" id="boundary-severity-critical-accepted" timestamp="2026-06-16T15:47:52.947Z" tests="2" failures="0" errors="0" time="0.007">
+    <testcase name="CRITICAL severity (enum boundary) returns 202" time="0.007" classname="04BoundaryPostAlertsCriticalSeverityMaxEnumIsAccepted"/>
+    <testcase name="Response has PENDING status" time="0.007" classname="04BoundaryPostAlertsCriticalSeverityMaxEnumIsAccepted"/>
+  </testsuite>
+  <testsuite name="05_Consumer_side_Smoke / Consumer smoke - call AI Vision mock" id="consumer-smoke-ai-vision" timestamp="2026-06-16T15:47:52.947Z" tests="1" failures="0" errors="1" time="0.000">
+    <system-err><![CDATA[Iteration: 0
+RequestError: Error: connect ECONNREFUSED 127.0.0.1:4011
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+
+---
+]]></system-err>
+    <testcase name="Skipped on local: AI Vision mock not co-located with container" time="0.000" classname="05ConsumerSideSmokeConsumerSmokeCallAiVisionMock"/>
+  </testsuite>
+  <testsuite name="06_NonFunctional / POST /alerts - local response time under 1000ms" id="nonfunc-latency-1000ms" timestamp="2026-06-16T15:47:52.947Z" tests="1" failures="0" errors="0" time="0.009">
+    <testcase name="Local/Docker service responds under 1000ms" time="0.009" classname="06NonFunctionalPostAlertsLocalResponseTimeUnder1000Ms"/>
+  </testsuite>
+</testsuites>

@@ -1,352 +1,431 @@
 openapi: 3.1.0
 info:
-  title: FIT4110 Lab 04 - IoT Ingestion API
-  version: 0.4.0
+  title: Multi-Channel Alert Service API (Notification Service - B7)
+  version: 1.1.0
   description: |
-    Contract dùng cho Lab 04 Docker packaging, được đồng bộ lại với logic Lab 03.
-    Payload chính dùng các trường device_id, metric, value, unit và timestamp.
-    Boundary minh họa cho temperature là -40 đến 80.
+    API chính thức cho phân hệ dịch vụ cảnh báo đa kênh (B7).
+    Hệ thống hỗ trợ tiếp nhận các yêu cầu cảnh báo từ Core Business (B6) hoặc AI Vision thông qua HTTP REST,
+    xử lý chống trùng lặp dữ liệu, kiểm tra cấu hình người dùng, và thực hiện gửi thông báo đa kênh (SMS, Email, Push).
+  contact:
+    name: FIT4110 Team Notify
+    email: notify-b7@example.edu.vn
+
 servers:
-  - url: http://localhost:8000
-    description: Local or Docker container service
   - url: http://localhost:4010
-    description: Prism mock server
+    description: Prism mock server phục vụ Lab 03
+  - url: https://api.campus.local
+    description: Môi trường deploy thực tế hệ thống Smart Campus
+
 tags:
-  - name: system
-    description: Health and runtime information
-  - name: readings
-    description: Sensor telemetry ingestion
+  - name: health
+    description: Kiểm tra trạng thái hoạt động nội bộ của Service
+  - name: alerts
+    description: Tiếp nhận và quản lý trạng thái các luồng cảnh báo an ninh
 
 security:
   - bearerAuth: []
 
 paths:
+
+  # ==================== PATH 1: HEALTH CHECK ====================
   /health:
     get:
-      tags: [system]
       operationId: getHealth
-      summary: Kiểm tra trạng thái service
-      description: Public health check dùng để kiểm tra container hoặc mock server đã sẵn sàng.
-      security: []
+      summary: Kiểm tra sức khỏe hệ thống
+      description: Kiểm tra xem service B7 có đang hoạt động bình thường hay không trước khi chạy tích hợp.
+      tags:
+        - health
+      security: [] # Miễn trừ kiểm tra token đối với health check
       responses:
-        "200":
-          description: Service đang hoạt động
+        '200':
+          description: Service hoạt động ổn định.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthResponse"
+                $ref: '#/components/schemas/HealthStatus'
               examples:
                 ok:
                   value:
-                    status: ok
-                    service: iot-ingestion
-                    version: 0.4.0
+                    status: "ok"
+                    service: "notification-service"
+                    time: "2026-06-08T23:00:00Z"
 
-  /readings:
+  # ==================== PATH 2: POST ALERT (KHỚP HOÀN TOÀN VỚI B6) ====================
+  /alerts:
     post:
-      tags: [readings]
-      operationId: createReading
-      summary: Gửi một bản ghi cảm biến từ thiết bị IoT
+      operationId: createAlert
+      summary: Tiếp nhận yêu cầu gửi cảnh báo an ninh
       description: |
-        Endpoint nhận telemetry từ ESP32 hoặc gateway.
-        Request phải có device_id, metric, value và timestamp.
-        Trong lab này, ví dụ boundary dùng nhiệt độ hợp lệ từ -40 đến 80.
+        Endpoint tiếp nhận payload sự kiện. Cấu trúc dữ liệu yêu cầu bắt buộc phải ánh xạ khớp 100% 
+        với đặc tả nghiệp vụ lõi (Core Business) nhằm xử lý điều hướng tin nhắn.
+      tags:
+        - alerts
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Khóa chống gửi trùng lặp trên HTTP layer (nếu consumer sử dụng cơ chế này).
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SensorReadingCreate"
-            examples:
-              valid_temperature:
-                value:
-                  device_id: ESP32-LAB-A01
-                  metric: temperature
-                  value: 31.5
-                  unit: celsius
-                  timestamp: "2026-05-13T08:30:00+07:00"
-              boundary_high_temperature:
-                value:
-                  device_id: ESP32-LAB-A01
-                  metric: temperature
-                  value: 80
-                  unit: celsius
-                  timestamp: "2026-05-13T08:30:00+07:00"
+              $ref: '#/components/schemas/AlertPayload'
+          examples:
+            criticalAccessAlert:
+              value:
+                eventId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2babc"
+                eventType: "core.alert.created"
+                occurredAt: "2026-06-08T23:15:00Z"
+                correlationId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2aaaa"
+                source: "core-business"
+                data:
+                  alertId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2bcde"
+                  severity: "HIGH"
+                  message: "Phát hiện xâm nhập trái phép tại khu vực cổng chính tòa IT"
+                  targetUserId: "SV-12345"
       responses:
-        "201":
-          description: Đã ghi nhận bản đọc cảm biến
-          headers:
-            X-Warning:
-              description: Warning trả về khi reading được chấp nhận nhưng có rủi ro, ví dụ nhiệt độ cao.
+        '202':
+          description: Yêu cầu đã được tiếp nhận hợp lệ và đưa vào hàng đợi xử lý ngầm (Asynchronous).
+          content:
+            application/json:
+              schema: 
+                $ref: '#/components/schemas/NotificationAccepted'
+              examples:
+                accepted:
+                  value:
+                    notificationId: "0196fb3d-4ad7-7d1e-9f49-5d5148d2cccc"
+                    status: "PENDING"
+                    acceptedAt: "2026-06-08T23:15:05Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Xảy ra trùng lặp dữ liệu do trùng eventId hoặc Idempotency-Key.
+          content:
+            application/problem+json:
               schema:
-                type: string
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==================== PATH 3: GET RECENT ALERTS ====================
+  /alerts/recent:
+    get:
+      operationId: getRecentAlerts
+      summary: Tra cứu lịch sử các cảnh báo vừa nhận
+      description: Lấy danh sách các thông báo đã gửi hoặc đang xử lý trong hệ thống để phục vụ đối soát.
+      tags:
+        - alerts
+      responses:
+        '200':
+          description: Trả về mảng danh sách chi tiết trạng thái gửi tin.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SensorReadingCreated"
-              examples:
-                created:
-                  value:
-                    reading_id: R-20260513-0001
-                    device_id: ESP32-LAB-A01
-                    metric: temperature
-                    accepted: true
-                    created_at: "2026-05-13T08:30:01+07:00"
-        "401":
-          description: Thiếu hoặc sai token
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-              examples:
-                unauthorized:
-                  value:
-                    type: https://smart-campus.local/problems/unauthorized
-                    title: Unauthorized
-                    status: 401
-                    detail: Missing or invalid bearer token
-                    instance: /readings
-        "422":
-          description: Request không hợp lệ
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-              examples:
-                validation_error:
-                  value:
-                    type: https://smart-campus.local/problems/validation-error
-                    title: Validation error
-                    status: 422
-                    detail: body.value must be less than or equal to 80
-                    instance: /readings
-        "429":
-          description: Thiết bị gửi dữ liệu quá nhiều trong thời gian ngắn
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationStatusDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
-  /readings/latest:
-    get:
-      tags: [readings]
-      operationId: getLatestReadings
-      summary: Lấy các bản ghi cảm biến mới nhất
-      description: Trả về danh sách bản ghi mới nhất, có thể lọc theo thiết bị và giới hạn số dòng.
+  # ==================== PATH 4: USER PREFERENCES ====================
+  /notifications/preferences/{userId}:
+    put:
+      operationId: updateNotificationPreferences
+      summary: Thay đổi cấu hình nhận tin nhắn của người dùng
+      description: Cho phép người dùng (sinh viên/giảng viên/quản trị viên) chủ động bật/tắt nhận tin qua các kênh SMS, Email, Push.
+      tags:
+        - alerts
       parameters:
-        - in: query
-          name: device_id
-          required: false
-          schema:
-            type: string
-          example: ESP32-LAB-A01
-        - in: query
-          name: limit
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 10
-          example: 5
-      responses:
-        "200":
-          description: Danh sách bản ghi mới nhất
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/SensorReading"
-              examples:
-                latest:
-                  value:
-                    items:
-                      - reading_id: R-20260513-0001
-                        device_id: ESP32-LAB-A01
-                        metric: temperature
-                        value: 31.5
-                        unit: celsius
-                        timestamp: "2026-05-13T08:30:00+07:00"
-                        created_at: "2026-05-13T08:30:01+07:00"
-        "401":
-          description: Thiếu hoặc sai token
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "422":
-          description: Query parameter không hợp lệ
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-
-  /readings/{reading_id}:
-    get:
-      tags: [readings]
-      operationId: getReadingById
-      summary: Lấy chi tiết một bản ghi cảm biến
-      parameters:
-        - name: reading_id
+        - name: userId
           in: path
           required: true
           schema:
             type: string
-            pattern: "^R-[0-9]{8}-[0-9]{4}$"
-          example: R-20260513-0001
+            example: "SV-12345"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferencesRequest'
       responses:
-        "200":
-          description: Chi tiết bản ghi cảm biến
+        '200':
+          description: Cập nhật cấu hình kênh truyền thông thành công.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SensorReading"
-              examples:
-                reading:
-                  value:
-                    reading_id: R-20260513-0001
-                    device_id: ESP32-LAB-A01
-                    metric: temperature
-                    value: 31.5
-                    unit: celsius
-                    timestamp: "2026-05-13T08:30:00+07:00"
-                    created_at: "2026-05-13T08:30:01+07:00"
-        "401":
-          description: Thiếu hoặc sai token
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
-          description: Không tìm thấy bản ghi
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-              examples:
-                not_found:
-                  value:
-                    type: https://smart-campus.local/problems/not-found
-                    title: Not Found
-                    status: 404
-                    detail: Reading R-20260513-9999 does not exist
-                    instance: /readings/R-20260513-9999
+                type: object
+                required: [updated]
+                properties:
+                  updated:
+                    type: boolean
+                    example: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+webhooks:
+  notificationStatusUpdated:
+    post:
+      operationId: onNotificationStatusUpdated
+      summary: Callback bất đồng bộ báo trạng thái gửi tin thành công/thất bại về cho đối tác
+      tags:
+        - alerts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationStatusEvent'
+      responses:
+        '200':
+          description: Đầu nhận callback phản hồi đã ghi nhận sự kiện thành công.
 
 components:
+
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: token
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Dữ liệu gửi lên sai định dạng Schema, định dạng định nghĩa hoặc thiếu trường bắt buộc.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Request không có quyền truy cập do thiếu Token hoặc Token hết hạn.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Không tìm thấy thực thể hoặc tài nguyên yêu cầu.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableEntity:
+      description: Lỗi logic nghiệp vụ (Ví dụ tài khoản nhận thông báo không tồn tại trên hệ thống Smart Campus).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Hệ thống kích hoạt cơ chế Rate Limit phòng chống Spam thông báo rác.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalServerError:
+      description: Lỗi hệ thống không xác định hoặc sập kênh kết nối nhà mạng Telco.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
 
   schemas:
-    SensorMetric:
-      type: string
-      enum: [temperature, humidity, motion, smoke]
 
-    SensorUnit:
-      type: string
-      enum: [celsius, percent, boolean, ppm]
-
-    SensorReadingCreate:
+    HealthStatus:
       type: object
-      required: [device_id, metric, value, timestamp]
-      properties:
-        device_id:
-          type: string
-          minLength: 3
-          example: ESP32-LAB-A01
-        metric:
-          $ref: "#/components/schemas/SensorMetric"
-        value:
-          type: number
-          minimum: -40
-          maximum: 80
-          description: |
-            Giá trị mẫu dùng cho boundary test trong Lab 03 và Lab 04.
-            Với metric=temperature, miền hợp lệ minh họa là -40 đến 80.
-          example: 31.5
-        unit:
-          $ref: "#/components/schemas/SensorUnit"
-        timestamp:
-          type: string
-          format: date-time
-          example: "2026-05-13T08:30:00+07:00"
-
-    SensorReading:
-      allOf:
-        - $ref: "#/components/schemas/SensorReadingCreate"
-        - type: object
-          required: [reading_id, created_at]
-          properties:
-            reading_id:
-              type: string
-              pattern: "^R-[0-9]{8}-[0-9]{4}$"
-              example: R-20260513-0001
-            created_at:
-              type: string
-              format: date-time
-              example: "2026-05-13T08:30:01+07:00"
-
-    SensorReadingCreated:
-      type: object
-      required: [reading_id, device_id, metric, accepted, created_at]
-      properties:
-        reading_id:
-          type: string
-          pattern: "^R-[0-9]{8}-[0-9]{4}$"
-          example: R-20260513-0001
-        device_id:
-          type: string
-          example: ESP32-LAB-A01
-        metric:
-          $ref: "#/components/schemas/SensorMetric"
-        accepted:
-          type: boolean
-          example: true
-        created_at:
-          type: string
-          format: date-time
-          example: "2026-05-13T08:30:01+07:00"
-
-    HealthResponse:
-      type: object
-      required: [status, service, version]
+      additionalProperties: false
+      required: [status, service, time]
       properties:
         status:
           type: string
           enum: [ok]
-          example: ok
         service:
           type: string
-          example: iot-ingestion
-        version:
+        time:
           type: string
-          example: 0.4.0
+          format: date-time
 
-    ProblemDetails:
+    AlertSeverity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    # CẤU TRÚC BODY CHUẨN ĐƯỢC ĐỒNG BỘ TỪ FILE ASYNCAPI B6/B7
+    AlertPayload:
       type: object
-      required: [type, title, status, detail]
+      additionalProperties: false
+      required:
+        - eventId
+        - eventType
+        - occurredAt
+        - correlationId
+        - source
+        - data
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: ID duy nhất của Event dùng làm Khóa chống gửi trùng lặp (Deduplication ID).
+        eventType:
+          type: string
+          enum: [core.alert.created]
+          description: Định danh loại sự kiện nghiêm ngặt.
+        occurredAt:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+          format: uuid
+          description: Mã định danh phục vụ tracking log end-to-end.
+        source:
+          type: string
+          example: "core-business"
+        data:
+          type: object
+          required:
+            - alertId
+            - severity
+            - message
+            - targetUserId
+          properties:
+            alertId:
+              type: string
+              format: uuid
+            severity:
+              $ref: '#/components/schemas/AlertSeverity'
+            message:
+              type: string
+              minLength: 5
+              example: "Phát hiện sinh viên quẹt thẻ khóa"
+            targetUserId:
+              type: string
+              example: "SV-12345"
+
+    NotificationAccepted:
+      type: object
+      additionalProperties: false
+      required: [notificationId, status, acceptedAt]
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING]
+        acceptedAt:
+          type: string
+          format: date-time
+
+    NotificationStatusDetail:
+      type: object
+      additionalProperties: false
+      required: [notificationId, alertId, currentStatus, targetUserId]
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        alertId:
+          type: string
+          format: uuid
+        currentStatus:
+          type: string
+          enum: [PENDING, SENT, FAILED]
+        targetUserId:
+          type: string
+          example: "SV-12345"
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+          example: "SMS Gateway Timeout"
+
+    UpdatePreferencesRequest:
+      type: object
+      additionalProperties: false
+      required: [enabledChannels]
+      properties:
+        enabledChannels:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [SMS, EMAIL, PUSH]
+
+    NotificationStatusEvent:
+      type: object
+      additionalProperties: false
+      required: [eventId, eventType, occurredAt, correlationId, source, data]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum: [notification.status.updated]
+        occurredAt:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+          format: uuid
+        source:
+          type: string
+          example: "notification-service"
+        data:
+          type: object
+          required: [notificationId, alertId, status]
+          properties:
+            notificationId:
+              type: string
+              format: uuid
+            alertId:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [SENT, FAILED]
+
+    # ĐỊNH DẠNG PROBLEM DETAILS ĐẠT YÊU CẦU ĐÁNH GIÁ CHẤM ĐIỂM LAB
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status]
       properties:
         type:
           type: string
-          example: https://smart-campus.local/problems/validation-error
+          format: uri
+          example: "https://api.campus.local/errors/bad-request"
         title:
           type: string
-          example: Validation error
+          example: "Invalid Request Payload"
         status:
           type: integer
           minimum: 400
           maximum: 599
-          example: 422
+          example: 400
         detail:
           type: string
-          example: body.value must be less than or equal to 80
+          nullable: true
+          example: "Trường 'data.severity' sai quy định Enum hệ thống."
         instance:
           type: string
-          example: /readings
+          format: uri
+          nullable: true
